@@ -6,7 +6,7 @@ toolchain go1.27.1
 
 require (
 	github.com/KimMachineGun/automemlimit v1.0.0
-	github.com/caarlos0/env/v11 v11.4.1
+	github.com/caarlos0/env/v11 v11.4.2
 	github.com/creasty/defaults v1.11.0
 	github.com/go-logr/logr v1.4.4
 	github.com/gogo/protobuf v1.3.2
