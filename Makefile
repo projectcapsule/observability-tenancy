@@ -241,7 +241,7 @@ $(LOCALBIN):
 # -- Helm Plugins
 ####################
 
-HELM_SCHEMA_VERSION   := v2.6.0
+HELM_SCHEMA_VERSION   := v2.6.1
 HELM_SCHEMA_LOOKUP    := losisin/helm-values-schema-json
 # Helm 4 requires opting out of verification for plugins installed from Git.
 HELM_SCHEMA_INSTALL_FLAGS = $(shell $(HELM) version --short | awk '/^v4\./ {print "--verify=false"}')
