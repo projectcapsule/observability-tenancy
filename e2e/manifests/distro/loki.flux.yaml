@@ -6,7 +6,8 @@ metadata:
   namespace: flux-system
 spec:
   interval: 24h0m0s
-  url: https://grafana.github.io/helm-charts
+  type: oci
+  url: oci://ghcr.io/grafana-community/helm-charts
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -19,10 +20,12 @@ spec:
   timeout: 10m
   targetNamespace: monitoring-system
   releaseName: "loki"
+  dependsOn:
+    - name: kube-prometheus-stack
   chart:
     spec:
       chart: loki
-      version: "6.55.0"
+      version: "21.4.3"
       sourceRef:
         kind: HelmRepository
         name: loki
@@ -35,21 +38,23 @@ spec:
   driftDetection:
     mode: enabled
   values:
-    minio:
-      enabled: false
     global:
       clusterDomain: "cluster.local"
       dnsService: "kube-dns"
       dnsNamespace: "kube-system"
-      extraArgs:
-        - -config.expand-env=true
-      extraEnvFrom:
-        - secretRef:
-            name: lgtm-s3-credentials
+    # Monolithic (chart default) with local filesystem storage: no object storage needed for e2e
+    singleBinary:
+      replicas: 1
+    read:
+      replicas: 0
+    write:
+      replicas: 0
     backend:
-      extraEnvFrom:
-      - secretRef:
-          name: lgtm-s3-credentials
+      replicas: 0
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
     monitoring:
       serviceMonitor:
         enabled: true
@@ -59,6 +64,8 @@ spec:
           k8s-sidecar-target-directory: "/tmp/dashboards/Monitoring Stack"
     loki:
       auth_enabled: true
+      commonConfig:
+        replication_factor: 1
       querier:
         multi_tenant_queries_enabled: true
       # https://grafana.com/docs/loki/latest/operations/storage/retention/
@@ -67,14 +74,13 @@ spec:
         retention_enabled: true
         retention_delete_delay: 2h
         retention_delete_worker_count: 150
-        delete_request_store: s3
+        delete_request_store: filesystem
       limits_config:
         per_stream_rate_limit: 1024M
         per_stream_rate_limit_burst: 2048M
         cardinality_limit: 20000
         ingestion_burst_size_mb: 1000
         ingestion_rate_mb: 2000
-        # Delete from storage logs data older than 180 Days
         retention_period: 24h
         reject_old_samples: true
         reject_old_samples_max_age: 168h
@@ -86,22 +92,10 @@ spec:
         configs:
         - from: "2024-04-01"
           store: tsdb
-          object_store: s3
+          object_store: filesystem
           schema: v13
           index:
             prefix: index_
             period: 24h
       storage:
-        shared_store: s3
-        bucketNames:
-          chunks: loki-chunks
-          ruler: loki-ruler
-          admin: loki-admin
-        type: s3
-        s3:
-          endpoint: minio.monitoring-system.svc.cluster.local:9000
-          region: us-east-1
-          accessKeyId: "${S3_ACCESS_KEY}"
-          secretAccessKey: "${S3_ACCESS_SECRET}"
-          s3ForcePathStyle: true
-          insecure: true
+        type: filesystem

@@ -5,7 +5,5 @@ resources:
   - prometheus.flux.yaml
   - grafana.flux.yaml
   - loki.flux.yaml
-  - mimir.flux.yaml
-  - minio.flux.yaml
-  - pyroscope.flux.yaml
-  - tempo.flux.yaml
+  - mimir
+  - alloy.flux.yaml

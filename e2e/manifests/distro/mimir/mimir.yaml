@@ -1,0 +1,45 @@
+# Reference: https://grafana.com/docs/mimir/latest/references/configuration-parameters/
+multitenancy_enabled: true
+tenant_federation:
+  enabled: true
+server:
+  http_listen_port: 8080
+  grpc_listen_port: 9095
+  log_level: info
+usage_stats:
+  enabled: false
+common:
+  storage:
+    backend: filesystem
+blocks_storage:
+  filesystem:
+    dir: /data/blocks
+  bucket_store:
+    sync_dir: /data/tsdb-sync
+  tsdb:
+    dir: /data/tsdb
+ruler_storage:
+  filesystem:
+    dir: /data/rules
+alertmanager_storage:
+  filesystem:
+    dir: /data/alertmanager
+compactor:
+  data_dir: /data/compactor
+ingester:
+  ring:
+    instance_addr: 127.0.0.1
+    replication_factor: 1
+distributor:
+  ring:
+    instance_addr: 127.0.0.1
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+limits:
+  out_of_order_time_window: 3h
+  max_global_series_per_user: 2000000
+  accept_ha_samples: true
+  max_label_names_per_series: 40
+  compactor_blocks_retention_period: 90d
+

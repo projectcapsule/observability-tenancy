@@ -1,0 +1,79 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: alloy
+  namespace: flux-system
+spec:
+  interval: 24h0m0s
+  type: oci
+  url: oci://ghcr.io/grafana/helm-charts
+---
+# Log collector: tails the tenant namespaces through the Kubernetes API (no hostPath) and pushes to loki-proxy
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: flux-system
+spec:
+  serviceAccountName: kustomize-controller
+  interval: 15m
+  timeout: 10m
+  targetNamespace: monitoring-system
+  releaseName: "alloy"
+  chart:
+    spec:
+      chart: alloy
+      version: "1.16.0"
+      sourceRef:
+        kind: HelmRepository
+        name: alloy
+      interval: 24h
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      remediateLastFailure: true
+      retries: -1
+  driftDetection:
+    mode: enabled
+  values:
+    controller:
+      type: deployment
+    alloy:
+      configMap:
+        content: |
+          discovery.kubernetes "pods" {
+            role = "pod"
+            namespaces {
+              names = ["solar", "wind", "green"]
+            }
+          }
+
+          discovery.relabel "pods" {
+            targets = discovery.kubernetes.pods.targets
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+          }
+
+          loki.source.kubernetes "pods" {
+            targets    = discovery.relabel.pods.output
+            forward_to = [loki.write.proxy.receiver]
+          }
+
+          loki.write "proxy" {
+            endpoint {
+              url = "http://loki-proxy.monitoring-system.svc:8080/push"
+            }
+          }
