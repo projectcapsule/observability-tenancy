@@ -41,9 +41,6 @@ var _ = BeforeSuite(func() {
 	Expect(ctrlClient).ToNot(BeNil())
 
 	k8sClient = &e2eClient{Client: ctrlClient}
-
-	selector := e2eSelector("")
-	Expect(CleanTenants(selector)).ToNot(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {

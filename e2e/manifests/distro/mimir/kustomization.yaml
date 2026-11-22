@@ -1,0 +1,11 @@
+# Mimir in monolithic mode (-target=all) with local filesystem storage: no object storage needed for e2e.
+# Ref: https://grafana.com/docs/mimir/latest/references/architecture/deployment-modes/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring-system
+resources:
+  - resources.yaml
+configMapGenerator:
+  - name: mimir
+    files:
+      - mimir.yaml

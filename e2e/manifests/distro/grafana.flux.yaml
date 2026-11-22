@@ -6,7 +6,8 @@ metadata:
   namespace: flux-system
 spec:
   interval: 24h0m0s
-  url: https://grafana.github.io/helm-charts
+  type: oci
+  url: oci://ghcr.io/grafana-community/helm-charts
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -22,7 +23,7 @@ spec:
   chart:
     spec:
       chart: grafana
-      version: "9.3.2"
+      version: "14.5.0"
       sourceRef:
         kind: HelmRepository
         name: grafana
@@ -48,36 +49,36 @@ spec:
           - name: Loki (Direct)
             uid: loki
             type: loki
-            url: http://loki-distributed-gateway:80
+            url: http://loki-gateway:80
           - name: Loki (Solar)
-            uid: loki
+            uid: loki-solar
             type: loki
-            url: http://loki-distributed-gateway:80
+            url: http://loki-gateway:80
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
-              httpHeaderValue1: "green"
+              httpHeaderValue1: "solar"
           - name: Loki (Wind)
-            uid: loki
+            uid: loki-wind
             type: loki
-            url: http://loki-distributed-gateway:80
+            url: http://loki-gateway:80
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
               httpHeaderValue1: "wind"
-          - name: Loki (Green)
-            uid: loki
+          - name: Loki (Platform)
+            uid: loki-platform
             type: loki
-            url: http://loki-distributed-gateway:80
+            url: http://loki-gateway:80
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
-              httpHeaderValue1: "green"
+              httpHeaderValue1: "platform"
           # https://grafana.com/docs/grafana/latest/datasources/prometheus/#provision-the-data-source
           - name: Mimir (Direct)
             uid: prom
             type: prometheus
-            url: http://mimir-distributed-nginx:80/prometheus
+            url: http://mimir:8080/prometheus
             isDefault: true
           - name: Mimir (Solar)
             uid: prom-solar
@@ -86,55 +87,35 @@ spec:
             disableRecordingRules: false
             manageAlerts: true
             prometheusType: Mimir
-            url: http://mimir-distributed-nginx:80/prometheus
+            url: http://mimir:8080/prometheus
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
               httpHeaderValue1: "solar"
           - name: Mimir (Wind)
-            uid: prom-solar
+            uid: prom-wind
             type: prometheus
             cacheLevel: 'High'
             disableRecordingRules: false
             manageAlerts: true
             prometheusType: Mimir
-            url: http://mimir-distributed-nginx:80/prometheus
+            url: http://mimir:8080/prometheus
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
               httpHeaderValue1: "wind"
-          - name: Mimir (Green)
-            uid: prom-solar
+          - name: Mimir (Platform)
+            uid: prom-platform
             type: prometheus
             cacheLevel: 'High'
             disableRecordingRules: false
             manageAlerts: true
             prometheusType: Mimir
-            url: http://mimir-distributed-nginx:80/prometheus
+            url: http://mimir:8080/prometheus
             jsonData:
               httpHeaderName1: "X-Scope-OrgID"
             secureJsonData:
-              httpHeaderValue1: "green"
-          # https://grafana.com/docs/grafana/latest/datasources/tempo/configure-tempo-data-source/#provision-the-data-source
-          - name: Tempo (Direct)
-            uid: tempo
-            type: tempo
-            url: http:/tempo-query-frontend:3100
-            isDefault: false
-            jsonData:
-              tracesToLogsV2:
-                datasourceUid: loki
-              lokiSearch:
-                datasourceUid: loki
-              tracesToMetrics:
-                datasourceUid: prom
-              serviceMap:
-                datasourceUid: prom
-          - name: Pyroscope (Direct)
-            uid: pyroscope
-            type: grafana-pyroscope-datasource
-            url: http://pyroscope-headless:4040
-            isDefault: false
+              httpHeaderValue1: "platform"
     global:
       dnsService: "kube-dns"
       dnsNamespace: "kube-system"
@@ -147,7 +128,6 @@ spec:
       enabled: false
     plugins:
       - grafana-oncall-app
-      - grafana-pyroscope-app
       - grafana-lokiexplore-app
     env:
       GF_AUTH_ANONYMOUS_ENABLED: "true"

@@ -181,54 +181,67 @@ e2e-exec: ginkgo
 e2e-destroy: kind
 	$(KIND) delete cluster --name $(KIND_K8S_NAME)
 
-e2e-install: e2e-install-distro e2e-load-image-cortex e2e-install-loki
-	@$(MAKE) wait-for-helmreleases
+e2e-install: e2e-install-distro e2e-install-cortex e2e-install-loki e2e-install-tenants
+
+# Tenant namespaces (annotated with observe.addons.projectcapsule.dev/org) running podinfo (Flux HelmRelease) as a metrics source
+e2e-install-tenants:
+	@$(KUBECTL) apply -k e2e/manifests/tenants/
+	@$(KUBECTL) -n flux-system wait helmrelease/podinfo-solar helmrelease/podinfo-wind helmrelease/podinfo-green --for=condition=Ready --timeout=5m
 
 e2e-install-distro:
-	@$(KUBECTL) kustomize e2e/manifests/flux/ | kubectl apply -f -
-	@$(KUBECTL) kustomize e2e/manifests/distro/ | kubectl apply -f -
+	@$(KUBECTL) kustomize e2e/manifests/flux/ | $(KUBECTL) apply -f -
+	@$(KUBECTL) -n flux-system wait deploy/source-controller deploy/helm-controller --for=condition=Available --timeout=5m
+	@$(KUBECTL) kustomize e2e/manifests/distro/ | $(KUBECTL) apply -f -
+	@$(KUBECTL) -n flux-system wait helmrelease --all --for=condition=Ready --timeout=10m
+	@$(KUBECTL) -n monitoring-system rollout status statefulset/mimir --timeout=5m
 
-e2e-install-cortex: VERSION := 0.0.0
-e2e-install-cortex: KO_TAGS := 0.0.0
-e2e-install-cortex:
+# Images are built by ko straight into the kind node (KO_DOCKER_REPO=kind.local), no registry needed
+E2E_IMG_TAG ?= e2e
+
+.PHONY: e2e-image-cortex
+e2e-image-cortex: ko
+	@KIND_CLUSTER_NAME=$(KIND_K8S_NAME) LD_FLAGS=$(LD_FLAGS) KOCACHE=$(KOCACHE) KO_DOCKER_REPO=kind.local/cortex-proxy \
+		$(KO) build ./cmd/cortex-proxy/ --bare --tags=$(E2E_IMG_TAG) --platform=$(KO_PLATFORM)
+
+.PHONY: e2e-image-loki
+e2e-image-loki: ko
+	@KIND_CLUSTER_NAME=$(KIND_K8S_NAME) LD_FLAGS=$(LD_FLAGS) KOCACHE=$(KOCACHE) KO_DOCKER_REPO=kind.local/loki-proxy \
+		$(KO) build ./cmd/loki-proxy/ --bare --tags=$(E2E_IMG_TAG) --platform=$(KO_PLATFORM)
+
+e2e-install-cortex: e2e-image-cortex
 	$(HELM) upgrade \
-	    --dependency-update \
-		--debug \
 		--install \
+		--wait \
 		--namespace monitoring-system \
 		--create-namespace \
+		--set image.registry=kind.local \
+		--set image.repository=cortex-proxy \
+		--set image.tag=$(E2E_IMG_TAG) \
+		--set config.backend.url=http://mimir.monitoring-system.svc:8080/api/v1/push \
+		--set "config.tenant.labels[0]=namespace" \
+		--set config.tenant.default=platform \
 		--set args.logLevel=10 \
 		--set args.pprof=true \
 		cortex-proxy \
 		./charts/cortex-proxy
 
-.PHONY: e2e-load-image-cortex
-e2e-load-image-cortex:
-	kind load docker-image --name $(KIND_K8S_NAME) $(CORTEX_FULL_IMG):$(VERSION)
-
-e2e-install-loki: VERSION := 0.0.0
-e2e-install-loki: KO_TAGS := 0.0.0
-e2e-install-loki:
+e2e-install-loki: e2e-image-loki
 	$(HELM) upgrade \
-	    --dependency-update \
-		--debug \
 		--install \
+		--wait \
 		--namespace monitoring-system \
 		--create-namespace \
+		--set image.registry=kind.local \
+		--set image.repository=loki-proxy \
+		--set image.tag=$(E2E_IMG_TAG) \
+		--set config.backend.url=http://loki-gateway.monitoring-system.svc/loki/api/v1/push \
+		--set "config.tenant.labels[0]=namespace" \
+		--set config.tenant.default=platform \
 		--set args.logLevel=10 \
 		--set args.pprof=true \
 		loki-proxy \
 		./charts/loki-proxy
 
-.PHONY: e2e-load-image-loki
-e2e-load-image-loki:
-	kind load docker-image --name $(KIND_K8S_NAME) $(LOKI_FULL_IMG):$(VERSION)
-
-wait-for-helmreleases:
-	@ echo "Waiting for all HelmReleases to have observedGeneration >= 0..."
-	@while [ "$$($(KUBECTL) get helmrelease -A -o jsonpath='{range .items[?(@.status.observedGeneration<0)]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' | wc -l)" -ne 0 ]; do \
-	  sleep 5; \
-	done
 
 ##@ Build Dependencies
 
@@ -241,7 +254,7 @@ $(LOCALBIN):
 # -- Helm Plugins
 ####################
 
-HELM_SCHEMA_VERSION   := v2.6.0
+HELM_SCHEMA_VERSION   := v2.6.1
 HELM_SCHEMA_LOOKUP    := losisin/helm-values-schema-json
 # Helm 4 requires opting out of verification for plugins installed from Git.
 HELM_SCHEMA_INSTALL_FLAGS = $(shell $(HELM) version --short | awk '/^v4\./ {print "--verify=false"}')
@@ -266,13 +279,13 @@ helm-doc:
 # -- Tools
 ####################
 GINKGO := $(LOCALBIN)/ginkgo
-GINKGO_VERSION := v2.33.0
+GINKGO_VERSION := v2.34.0
 GINKGO_LOOKUP := onsi/ginkgo
 ginkgo:
 	@$(call go-install-tool,$(GINKGO),github.com/$(GINKGO_LOOKUP)/v2/ginkgo@$(GINKGO_VERSION))
 
 CT         := $(LOCALBIN)/ct
-CT_VERSION := v3.14.0
+CT_VERSION := v3.15.0
 CT_LOOKUP  := helm/chart-testing
 ct:
 	@$(call go-install-tool,$(CT),github.com/$(CT_LOOKUP)/v3/ct@$(CT_VERSION))
@@ -290,14 +303,14 @@ ko:
 	@$(call go-install-tool,$(KO),github.com/google/ko@$(KO_VERSION))
 
 NWA           := $(LOCALBIN)/nwa
-NWA_VERSION   := v0.8.0
+NWA_VERSION   := v0.8.1
 NWA_LOOKUP    := B1NARY-GR0UP/nwa
 nwa:
 	@$(call go-install-tool,$(NWA),github.com/$(NWA_LOOKUP)@$(NWA_VERSION))
 
 
 GOLANGCI_LINT          := $(LOCALBIN)/golangci-lint
-GOLANGCI_LINT_VERSION  := v2.14.0
+GOLANGCI_LINT_VERSION  := v2.15.0
 GOLANGCI_LINT_LOOKUP   := golangci/golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
 	@$(call go-install-tool,$(GOLANGCI_LINT),github.com/$(GOLANGCI_LINT_LOOKUP)/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION))
