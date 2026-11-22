@@ -290,7 +290,7 @@ ko:
 	@$(call go-install-tool,$(KO),github.com/google/ko@$(KO_VERSION))
 
 NWA           := $(LOCALBIN)/nwa
-NWA_VERSION   := v0.8.0
+NWA_VERSION   := v0.8.1
 NWA_LOOKUP    := B1NARY-GR0UP/nwa
 nwa:
 	@$(call go-install-tool,$(NWA),github.com/$(NWA_LOOKUP)@$(NWA_VERSION))
