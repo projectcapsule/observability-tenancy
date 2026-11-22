@@ -1,0 +1,21 @@
+# Tenant namespaces: the proxies map a namespace to a tenant via the observe.addons.projectcapsule.dev/org annotation
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: solar
+  annotations:
+    observe.addons.projectcapsule.dev/org: solar
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wind
+  annotations:
+    observe.addons.projectcapsule.dev/org: wind
+---
+# No tenant annotation: its data falls back to the proxy default tenant
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: green
